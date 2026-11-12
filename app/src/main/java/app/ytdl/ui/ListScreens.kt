@@ -105,7 +105,8 @@ fun ScheduleScreen(ui: Ui) {
 fun FailedScreen(ui: Ui) {
     @Suppress("UNUSED_VARIABLE") val v = ui.version
     val ctx = LocalContext.current
-    val sel = remember { mutableStateListOf<String>() }
+    val sel = remember { mutableStateListOf<String>() }      // ticked failed videos
+    val wsel = remember { mutableStateListOf<String>() }     // ticked waiting videos
     val block = remember(ui.version, ui.clock / 10) { CheckWorker.whyNotDownload(ctx) }
     var undo by remember { mutableStateOf<Undo?>(null) }
     LaunchedEffect(undo) { if (undo != null) { delay(5000); undo = null } }
@@ -114,11 +115,29 @@ fun FailedScreen(ui: Ui) {
         val i = Store.queue.indexOfFirst { it.videoId == q.videoId }
         if (i < 0) return
         Store.queue.removeAt(i)
+        wsel.remove(q.videoId)
         Downloader.cancel(q.videoId)
         Store.save()
         Store.log("Removed from queue: ${q.title}")
         undo = Undo("Removed “${q.title.take(40)}”") {
             if (Store.queue.none { it.videoId == q.videoId }) Store.queue.add(i.coerceAtMost(Store.queue.size), q)
+            Store.save()
+        }
+    }
+
+    fun removeWaitingSelected() {
+        val picked = Store.queue.filter { it.videoId in wsel }
+        if (picked.isEmpty()) return
+        picked.forEach { Downloader.cancel(it.videoId) }
+        val spots = picked.associateWith { q -> Store.queue.indexOf(q) }
+        Store.queue.removeAll { it.videoId in wsel }
+        wsel.clear()
+        Store.save()
+        Store.log("Removed ${picked.size} from the queue")
+        undo = Undo("Removed ${picked.size} video${if (picked.size == 1) "" else "s"}") {
+            spots.toList().sortedBy { it.second }.forEach { (q, i) ->
+                if (Store.queue.none { it.videoId == q.videoId }) Store.queue.add(i.coerceAtMost(Store.queue.size), q)
+            }
             Store.save()
         }
     }
@@ -136,7 +155,7 @@ fun FailedScreen(ui: Ui) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Page("Queue", "${Store.queue.size} waiting · ${Store.failed.size} gave up · swipe a video to remove it") {
+        Page("Queue", "${Store.queue.size} waiting · ${Store.failed.size} gave up · tick videos to remove them, or swipe one away") {
             // ---- waiting
             item {
                 NeuCard(Modifier.fillMaxWidth()) {
@@ -157,14 +176,33 @@ fun FailedScreen(ui: Ui) {
                         if (Store.queue.isEmpty()) {
                             Spacer(Modifier.height(10.dp))
                             Text("Nothing waiting.", style = Small)
+                        } else {
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                NeuToggle(wsel.isNotEmpty() && wsel.size == Store.queue.size, {
+                                    wsel.clear(); if (it) wsel.addAll(Store.queue.map { q -> q.videoId })
+                                }, "Select all", modifier = Modifier.weight(1f))
+                                NeuButton("Remove selected", { removeWaitingSelected() },
+                                    danger = true, enabled = wsel.isNotEmpty())
+                            }
                         }
                     }
                 }
             }
             items(Store.queue.toList().take(300), key = { "q" + it.videoId }) { q ->
+                val s = q.videoId in wsel
                 SwipeToDelete(onDelete = { deleteWaiting(q) }) {
-                    Box(Modifier.fillMaxWidth().neuRaised(16.dp, 5.dp).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        QueueRow(q)
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .then(if (s) Modifier.neuInset(16.dp, 4.dp) else Modifier.neuRaised(16.dp, 5.dp))
+                            .noRippleClick { if (s) wsel.remove(q.videoId) else wsel.add(q.videoId) }
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            NeuCheck(s)
+                            Spacer(Modifier.width(12.dp))
+                            Box(Modifier.weight(1f)) { QueueRow(q) }
+                        }
                     }
                 }
             }
