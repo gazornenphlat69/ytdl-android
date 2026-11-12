@@ -14,7 +14,7 @@ a user-picked folder: `<tree>/<list>/<Channel - Title>.<ext>`.
 | `YtdlApp.kt` | Application: init Store, notification channels, schedule the periodic worker, unpack yt-dlp |
 | `core/Store.kt` | All state as JSON files in `filesDir` plus `SharedPreferences` settings (`Store.S`). `Store.changes` flow drives UI refresh |
 | `core/Feeds.kt` | RSS fetch/parse (XmlPullParser) |
-| `core/Scheduler.kt` | Smart schedule, ported from the PC `ytdl_schedule.py` (window, busy and unknown rules, 24 h safety net) |
+| `core/Scheduler.kt` | Smart schedule, ported from the PC `ytdl_schedule.py` (upload-time windows at any hour, learning rule, one-week safety net) |
 | `core/Lookup.kt` | Link/@handle/video/ID → channel info, plus `validateChannel` |
 | `core/Importer.kt` | FlexGet `config.yml` import (regex parse, same rules as the PC) and the app's own JSON backup |
 | `core/Downloader.kt` | yt-dlp request building, outcome classification (OK/FAILED/LIVE/COOKIES), copy into the SAF tree |

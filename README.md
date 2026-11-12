@@ -5,7 +5,7 @@ It's the Android version of the ytdl PC tray app, with no PC needed and no conne
 
 ## Features
 - **Watches your channels.** It reads each channel's YouTube feed and queues new uploads as soon as they appear.
-- **Smart schedule.** It learns when each channel usually uploads and checks around those times. Every channel is still checked at least once a day.
+- **Smart schedule.** It learns when each channel usually uploads and checks around those times. It checks around those times at any hour of the day. Every channel is still checked at least once a week.
 - **Video or WAV per channel**, plus a choice of video quality (480p / 720p / 1080p / best).
 - **Download over mobile data: on or off.** When it's off, videos wait in the queue until you're on Wi-Fi.
 - **Optional "only while charging"** setting, and 1–4 downloads at once.
@@ -17,7 +17,7 @@ It's the Android version of the ytdl PC tray app, with no PC needed and no conne
 - **yt-dlp updates itself daily.** yt-dlp, Python and ffmpeg are all bundled in the app.
 
 ## Install
-1. Open the **Releases** page of this repository on your phone and download the newest APK.
+1. Open the **Releases** page of this repository on your phone and download the newest APK. The repository is private, so you need to be signed in to GitHub with an account that has access (or ask the owner for the APK file).
    Pick `app-arm64-v8a-release.apk`, which suits almost all phones from the last 7+ years, or `app-universal-release.apk` if you're unsure.
 2. Open the file. Android will ask you to allow installs from your browser or file manager the first time; allow it.
 3. Open **ytdl** and follow the four setup steps:

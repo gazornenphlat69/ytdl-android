@@ -8,21 +8,22 @@ import java.time.ZonedDateTime
  * Smart schedule (ported from the PC version's ytdl_schedule.py).
  *
  * A channel is due when:
- *  - it hasn't been checked for MAX_GAP (safety net), or
- *  - it has too little history / uploads very often -> every intervalMin, or
+ *  - it hasn't been checked for MAX_GAP (one week, the safety net), or
  *  - we're inside a window from LEAD before to WINDOW after one of its usual
- *    upload times of day (only on its usual weekdays, if consistent) -> every ACTIVE.
+ *    upload times of day, at any hour (only on its usual weekdays, if consistent)
+ *    -> every ACTIVE.
+ * Channels with too little history only get the safety net. Turning smart
+ * scheduling off checks every channel every intervalMin instead.
  */
 object Scheduler {
     private const val ACTIVE = 30 * 60L
     private const val WINDOW = 3 * 3600L
     private const val LEAD = 15 * 60L
-    private const val MAX_GAP = 24 * 3600L
+    private const val MAX_GAP = 7 * 24 * 3600L
     private const val MIN_UPLOADS = 4
-    private const val BUSY_GAP = 8 * 3600L
     private val DAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
-    enum class Kind { UNKNOWN, BUSY, PATTERN }
+    enum class Kind { UNKNOWN, PATTERN }
     data class Pattern(val kind: Kind, val minutes: List<Int>, val weekdays: Set<Int>?)
 
     private val cache = HashMap<String, Pair<Int, Pattern>>()
@@ -39,8 +40,6 @@ object Scheduler {
 
     private fun compute(ups: List<Long>): Pattern {
         if (ups.size < MIN_UPLOADS) return Pattern(Kind.UNKNOWN, emptyList(), null)
-        val gaps = ups.zipWithNext { a, b -> b - a }.sorted()
-        if (gaps.isNotEmpty() && gaps[gaps.size / 2] < BUSY_GAP) return Pattern(Kind.BUSY, emptyList(), null)
         val recent = ups.takeLast(30).map { ZonedDateTime.ofInstant(Instant.ofEpochSecond(it), zone) }
         val minutes = recent.map { it.hour * 60 + it.minute }.distinct().sorted()
         val days = recent.map { it.dayOfWeek.value - 1 }.toSet()
@@ -67,12 +66,10 @@ object Scheduler {
     /** Returns (due, reason). */
     fun isDue(c: Channel, ts: Long): Pair<Boolean, String> {
         val since = ts - Store.state(c.name).lastChecked
-        val interval = Store.S.intervalMin * 60L
         if (since >= MAX_GAP) return true to "safety check"
-        if (!Store.S.smart) return (since >= interval) to "every ${Store.S.intervalMin} min"
+        if (!Store.S.smart) return (since >= Store.S.intervalMin * 60L) to "every ${Store.S.intervalMin} min"
         return when (pattern(c.name).kind) {
-            Kind.UNKNOWN -> (since >= interval) to "learning"
-            Kind.BUSY -> (since >= interval) to "uploads often"
+            Kind.UNKNOWN -> false to "learning"
             Kind.PATTERN -> if (inWindow(c.name, ts)) (since >= ACTIVE) to "upload window"
                             else false to "outside window"
         }
@@ -83,9 +80,9 @@ object Scheduler {
     /** Earliest time any channel becomes due, and how many. */
     fun nextDue(from: Long = now()): Pair<Long, Int> {
         val list = Store.channels.toList()
-        if (list.isEmpty()) return (from + 24 * 3600) to 0
+        if (list.isEmpty()) return (from + MAX_GAP) to 0
         var t = from + 5 * 60
-        val end = from + 24 * 3600
+        val end = from + MAX_GAP + 3600     // covers the weekly safety net
         while (t <= end) {
             val n = list.count { isDue(it, t).first }
             if (n > 0) return t to n
@@ -102,8 +99,7 @@ object Scheduler {
                 val days = p.weekdays?.sorted()?.joinToString(" ") { DAYS[it] } ?: "Any day"
                 if (Store.S.smart) "$days · around $times" else "Every ${Store.S.intervalMin} min"
             }
-            Kind.BUSY -> "Uploads very often · every ${Store.S.intervalMin} min"
-            Kind.UNKNOWN -> "Learning · every ${Store.S.intervalMin} min"
+            Kind.UNKNOWN -> "Learning · checked at least every ${MAX_GAP / 86400} days"
         }
     }
 
